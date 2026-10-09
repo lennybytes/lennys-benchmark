@@ -84,7 +84,13 @@ A full run of roughly one minute with live thermals:
 --vsync                enable vertical sync
 --wireframe            draw the scene as wireframe
 --screenshot FILE      save a rendered frame as a PPM image
+--supersample N        internal render scale 1..4 (default 1)
 --gpu-vendor V         auto | nvidia | amd | system (default auto)
+
+--stress               max out CPU and GPU until Ctrl+C
+--stress-cpu           max out all CPU cores only
+--stress-gpu           max out the GPU only
+--stress-seconds N     stop the stress test after N seconds (0 = Ctrl+C)
 
 --json FILE            also write machine readable results
 --seed N               RNG seed for the CPU tests
@@ -131,6 +137,37 @@ integrated Radeon/Intel) is used.
 discrete GPU temperature, core/memory clocks, utilisation and power draw once
 per second. A live line is printed while running and a min/avg/max summary is
 added to the report.
+
+## Maximum-load stress test
+
+Besides benchmarking, `lennys-benchmark` can act as a system stress test that
+pins the hardware at 100 % to find the thermal and power limits of a machine
+("bis es nicht mehr geht" — until it throttles or you stop it):
+
+```bash
+# CPU + GPU at maximum load, live temperatures, until Ctrl+C
+./bin/lennys-benchmark --stress --monitor
+
+# Bounded run: 5 minutes, then a temperature/power summary
+./bin/lennys-benchmark --stress --stress-seconds 300 --monitor
+
+# CPU only — every core at 100 %
+./bin/lennys-benchmark --stress-cpu --monitor
+
+# GPU only — maximum tessellation, 32 instances, 2x supersampling
+./bin/lennys-benchmark --stress-gpu --monitor
+```
+
+- **CPU stress** runs an FMA kernel on every logical core, automatically using
+  **AVX-512**, **AVX2+FMA** or a scalar fallback (chosen at runtime, so the
+  binary stays portable), plus a streaming memory-triad. The live line reports
+  achieved **GFLOP/s** and memory **GB/s**.
+- **GPU stress** forces the heaviest settings (`--quality 4`, 32 instances,
+  `--supersample 2`) and renders without a time limit, keeping the GPU at
+  ~100 % utilisation and maximum board power.
+- `--monitor` adds the once-per-second temperature / clock / power line and the
+  min/avg/max summary (CPU package, integrated GPU, discrete GPU, NVMe).
+- `Ctrl+C` stops the run cleanly and still prints the summary.
 
 ## What is measured?
 

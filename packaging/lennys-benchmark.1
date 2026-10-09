@@ -87,6 +87,24 @@ Save a rendered frame as a PPM image.
 .TP
 .BR \-\-gpu\-vendor " V"
 Select the GPU: \fIauto\fR, \fInvidia\fR, \fIamd\fR or \fIsystem\fR (default auto).
+.TP
+.BR \-\-supersample " N"
+Render the scene at N times the window resolution (1..4) and down-sample on
+composite; larger values increase the fill load.
+.SS Maximum-load stress test
+.TP
+.BR \-\-stress
+Pin every CPU core and the GPU at 100 % until stopped (Ctrl+C).
+.TP
+.BR \-\-stress-cpu
+Pin all CPU cores at 100 %.  Uses an AVX-512 / AVX2+FMA kernel chosen at
+runtime plus a streaming memory pass.
+.TP
+.BR \-\-stress-gpu
+Pin the GPU at 100 %: maximum tessellation, 32 instances, 2x supersampling.
+.TP
+.BR \-\-stress-seconds " N"
+Stop the stress test after N seconds (0 = until Ctrl+C).
 .SS Output
 .TP
 .BR \-\-json " FILE"
@@ -127,4 +145,4 @@ The benchmark binary.
 .BR nvidia-smi (1),
 .BR glxinfo (1)
 .SH AUTHOR
-lfisbeck650-cloud.
+lennybytes.

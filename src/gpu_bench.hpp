@@ -19,6 +19,8 @@ struct GpuOptions {
     bool vsync = false;
     bool interactive = false;  // run until the window is closed / ESC
     bool wireframe = false;
+    bool stress = false;      // sustained max-load mode (max quality, endless)
+    int  supersample = 1;     // internal render resolution multiplier (1..4)
     int  instances = 0;       // 0 => derived from quality
     int  bloomIterations = 6;
     bool suppressProgress = false;  // no \r progress (used with --monitor)

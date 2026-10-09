@@ -9,6 +9,7 @@
 //  ACES tone-mapping post process.  Frame times are sampled while rendering.
 //
 #include "gpu_bench.hpp"
+#include "stress.hpp"
 #include "util.hpp"
 
 #include <X11/Xlib.h>
@@ -844,7 +845,8 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
     }
 
     // ---- geometry ---------------------------------------------------------
-    const int quality = std::clamp(opts.quality, 1, 4);
+    int quality = std::clamp(opts.quality, 1, 4);
+    if (opts.stress) quality = 4;  // maximum tessellation for the stress test
     struct Preset { int along; int radial; int instances; };
     const Preset presets[5] = {
         {0, 0, 0},
@@ -855,7 +857,15 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
     };
     const Preset& P = presets[quality];
     int instances = opts.instances > 0 ? std::min(opts.instances, 32) : P.instances;
+    if (opts.stress && opts.instances <= 0) instances = 32;
     instances = std::clamp(instances, 1, 32);
+
+    // Internal render resolution multiplier: renders the scene (and the HDR
+    // buffer) at ss x the window resolution and downsamples on composite. This
+    // is a cheap way to push the GPU to its fill-rate limit.
+    const int ss = std::clamp(opts.supersample, 1, 4);
+    const int targetW = std::max(1, w.width * ss);
+    const int targetH = std::max(1, w.height * ss);
 
     Mesh knotMesh = makeTorusKnot(P.along, P.radial, 0.16f);
     Mesh floorMesh = makePlane(quality >= 3 ? 400 : 256, 26.0f);
@@ -876,8 +886,8 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
                          + static_cast<uint64_t>(floorMesh.vertices.size());
     out.drawCallsPerFrame = 2;
 
-    RenderTarget hdr = createRenderTarget(w.width, w.height, true);
-    int bw = std::max(1, w.width / 2), bh = std::max(1, w.height / 2);
+    RenderTarget hdr = createRenderTarget(targetW, targetH, true);
+    int bw = std::max(1, targetW / 2), bh = std::max(1, targetH / 2);
     RenderTarget bloomA = createRenderTarget(bw, bh, false);
     RenderTarget bloomB = createRenderTarget(bw, bh, false);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
@@ -965,6 +975,7 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
     auto renderFrame = [&](float time, float exposure, bool cursorLight) {
         w.resizeIfNeeded();
         int fw = w.width, fh = w.height;
+        int rw = fw * ss, rh = fh * ss;   // internal (supersampled) resolution
 
         // camera
         Vec3 center{0, 0, 0};
@@ -976,7 +987,7 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
         };
         Mat4 view = Mat4::lookAt(eye, center, Vec3{0, 1, 0});
         Mat4 proj = Mat4::perspective(55.0f * kPi / 180.0f,
-                                      static_cast<float>(fw) / static_cast<float>(std::max(1, fh)),
+                                      static_cast<float>(rw) / static_cast<float>(std::max(1, rh)),
                                       0.1f, 200.0f);
         Mat4 viewProj = proj * view;
 
@@ -993,7 +1004,7 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
 
         // ---- geometry pass into HDR ----
         glBindFramebuffer(GL_FRAMEBUFFER, hdr.fbo);
-        glViewport(0, 0, fw, fh);
+        glViewport(0, 0, rw, rh);
         glClearColor(0.01f, 0.012f, 0.02f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1098,13 +1109,15 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
     }
 
     const double duration = opts.seconds;
+    // Endless runs: interactive mode and stress mode without a time limit.
+    const bool endless = opts.interactive || (opts.stress && opts.seconds <= 0.0);
 
     // Warm-up: compile shaders, fill caches and let the GPU clock ramp up.
     // Nothing here is measured.
     {
         double warmStart = nowSeconds();
         double warmSeconds = opts.interactive ? 0.0 : 1.0;
-        while (!input.quit && nowSeconds() - warmStart < warmSeconds) {
+        while (!input.quit && !interrupted() && nowSeconds() - warmStart < warmSeconds) {
             pumpEvents(w, input);
             if (input.quit) break;
             renderFrame(static_cast<float>(nowSeconds()), exposure, true);
@@ -1136,8 +1149,9 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
         double t = nowSeconds();
         double elapsed = t - start;
 
-        if (input.paused && !opts.interactive) break; // pause aborts the timed run
-        if (!opts.interactive && elapsed >= duration) break;
+        if (input.paused && !endless) break; // pause aborts the timed run
+        if (!endless && elapsed >= duration) break;
+        if (interrupted()) break;
 
         float sceneTime = input.paused ? 0.0f : static_cast<float>(t);
         renderFrame(sceneTime, exposure, true);
@@ -1177,20 +1191,31 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
                   << fixed(1000.0 / std::max(fps, 1e-3), 2) << " ms";
             w.setTitle(title.str());
 
-            if (!opts.interactive && !opts.suppressProgress) {
-                std::printf("\r  %s  %5.1fs / %.0fs   %s %6.1f FPS   %s %6.2f ms   %s %6.1f M tris/frame   ",
-                            paint("laufend", ansi::yellow()).c_str(),
-                            elapsed, duration,
-                            paint("FPS", ansi::gray()).c_str(), fps,
-                            paint("frame", ansi::gray()).c_str(), 1000.0 / std::max(fps, 1e-3),
-                            paint("geometry", ansi::gray()).c_str(),
-                            out.trianglesPerFrame / 1e6);
+            if (opts.suppressProgress) {
+                // the live monitor line owns the terminal
+            } else if (!opts.interactive) {
+                if (endless)
+                    std::printf("\r  %s  %5.1fs (Ctrl+C to stop)   %s %6.1f FPS   %s %6.2f ms   %s %6.1f M tris/frame   ",
+                                paint("stressing", ansi::yellow()).c_str(),
+                                elapsed,
+                                paint("FPS", ansi::gray()).c_str(), fps,
+                                paint("frame", ansi::gray()).c_str(), 1000.0 / std::max(fps, 1e-3),
+                                paint("geometry", ansi::gray()).c_str(),
+                                out.trianglesPerFrame / 1e6);
+                else
+                    std::printf("\r  %s  %5.1fs / %.0fs   %s %6.1f FPS   %s %6.2f ms   %s %6.1f M tris/frame   ",
+                                paint("running", ansi::yellow()).c_str(),
+                                elapsed, duration,
+                                paint("FPS", ansi::gray()).c_str(), fps,
+                                paint("frame", ansi::gray()).c_str(), 1000.0 / std::max(fps, 1e-3),
+                                paint("geometry", ansi::gray()).c_str(),
+                                out.trianglesPerFrame / 1e6);
                 std::fflush(stdout);
             } else {
                 std::printf("\r  %s  FPS %6.1f   frame %6.2f ms   %s   ",
-                            paint("interaktiv", ansi::cyan()).c_str(), fps,
+                            paint("interactive", ansi::cyan()).c_str(), fps,
                             1000.0 / std::max(fps, 1e-3),
-                            input.paused ? paint("PAUSIERT", ansi::yellow()).c_str() : "");
+                            input.paused ? paint("PAUSED", ansi::yellow()).c_str() : "");
                 std::fflush(stdout);
             }
         }
@@ -1229,7 +1254,7 @@ bool runGpuBenchmark(const GpuOptions& opts, GpuBenchResult& out, std::string& e
         out.avgFps = 1000.0 / std::max(out.avgFrameMs, 1e-3);
 
     out.geometryRate = static_cast<double>(out.trianglesPerFrame) * out.avgFps;
-    out.pixelRate = static_cast<double>(out.width) * out.height * out.avgFps;
+    out.pixelRate = static_cast<double>(out.width) * ss * out.height * ss * out.avgFps;
 
     // Normalised score: geometry and fill throughput combined.
     constexpr double refTris = 1.5e9;      // tris/s  -> 1000 points

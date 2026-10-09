@@ -6,6 +6,7 @@
 #include "cpu_bench.hpp"
 #include "gpu_bench.hpp"
 #include "monitor.hpp"
+#include "stress.hpp"
 #include "system_info.hpp"
 #include "util.hpp"
 
@@ -34,6 +35,10 @@ struct Options {
     bool showInfo = false;
     bool listGpus = false;
     bool monitor = false;
+    bool stress = false;       // sustained maximum-load mode
+    bool stressCpu = false;    // stress the CPU
+    bool stressGpu = false;    // stress the GPU
+    double stressSeconds = 0.0;  // 0 => until interrupted
     bool json = false;
     std::string jsonPath;
     std::string gpuVendor = "auto";   // auto | nvidia | amd | system
@@ -77,7 +82,13 @@ void printHelp() {
     std::printf("  --vsync               enable vertical sync\n");
     std::printf("  --wireframe           draw the scene as wireframe\n");
     std::printf("  --screenshot FILE     save a rendered frame to a PPM image\n");
+    std::printf("  --supersample N       internal render scale 1..4 (default 1)\n");
     std::printf("  --gpu-vendor V        auto|nvidia|amd|system (default auto)\n\n");
+    std::printf("Maximum-load stress test:\n");
+    std::printf("  --stress              max out CPU and GPU until Ctrl+C\n");
+    std::printf("  --stress-cpu          max out all CPU cores only\n");
+    std::printf("  --stress-gpu          max out the GPU only\n");
+    std::printf("  --stress-seconds N    stop the stress test after N seconds (0 = Ctrl+C)\n\n");
     std::printf("Output:\n");
     std::printf("  --json FILE           also write machine readable results\n");
     std::printf("  --seed N              RNG seed for the CPU tests\n");
@@ -174,6 +185,20 @@ bool parseArgs(int argc, char** argv, Options& o, bool& wantHelp) {
             const char* v = needValue(i, "--gpu-vendor");
             if (!v) return false;
             o.gpuVendor = v;
+        }
+        else if (a == "--supersample") {
+            const char* v = needValue(i, "--supersample");
+            if (!v) return false;
+            o.gpu.supersample = std::atoi(v);
+        }
+        else if (a == "--stress") { o.stress = true; o.stressCpu = o.stressGpu = true; }
+        else if (a == "--stress-cpu") { o.stress = true; o.stressCpu = true; }
+        else if (a == "--stress-gpu") { o.stress = true; o.stressGpu = true; }
+        else if (a == "--stress-seconds") {
+            const char* v = needValue(i, "--stress-seconds");
+            if (!v) return false;
+            o.stress = true;
+            o.stressSeconds = std::atof(v);
         }
         else {
             std::fprintf(stderr, "error: unknown option '%s' (try --help)\n", a.c_str());
@@ -423,6 +448,50 @@ bool writeJson(const std::string& path, const CpuInfo& cpu, const std::vector<Gp
 
 } // namespace
 
+// Sustained maximum-load test: keep every CPU core and/or the GPU pinned at
+// 100 % until the time limit is reached or the user presses Ctrl+C.
+void runStressMode(const Options& o, Monitor& monitor) {
+    const bool runCpu = o.stressCpu;
+    const bool runGpu = o.stressGpu;
+
+    std::printf("%s%sMaximum-load Stress Test%s\n", ansi::bold(), ansi::cyan(), ansi::reset());
+    const std::string goal = (runCpu && runGpu) ? "CPU + GPU" : (runCpu ? "CPU" : "GPU");
+    if (o.stressSeconds > 0.0)
+        std::printf("  targets   : %s%s%s\n  duration  : %s seconds\n\n",
+                    ansi::yellow(), goal.c_str(), ansi::reset(),
+                    fixed(o.stressSeconds, 0).c_str());
+    else
+        std::printf("  targets   : %s%s%s\n  duration  : until Ctrl+C\n\n",
+                    ansi::yellow(), goal.c_str(), ansi::reset());
+
+    CpuStress cpu;
+    if (runCpu) cpu.start(o.cpu.threads);
+
+    if (runGpu) {
+        GpuOptions g = o.gpu;
+        g.stress = true;
+        g.showWindow = true;
+        g.seconds = o.stressSeconds;
+        g.quality = 4;
+        if (g.instances <= 0) g.instances = 32;
+        if (g.supersample < 2) g.supersample = 2;   // double internal resolution
+        GpuBenchResult r;
+        std::string err;
+        if (!runGpuBenchmark(g, r, err))
+            std::fprintf(stderr, "  error: GPU stress failed: %s\n", err.c_str());
+        else
+            std::printf("  %sGPU stress%s  avg %.1f FPS  -  %llu frames in %.1f s\n",
+                        ansi::green(), ansi::reset(), r.avgFps,
+                        static_cast<unsigned long long>(r.frames), r.seconds);
+    } else {
+        cpu.wait(o.stressSeconds);
+    }
+
+    if (runCpu) cpu.stop();
+    (void)monitor;
+    std::printf("\n");
+}
+
 int main(int argc, char** argv) {
     ansi::enabled() = ::isatty(1) && std::getenv("NO_COLOR") == nullptr;
     std::ios::sync_with_stdio(false);
@@ -431,6 +500,8 @@ int main(int argc, char** argv) {
     bool wantHelp = false;
     if (!parseArgs(argc, argv, o, wantHelp)) return 2;
     if (wantHelp) { printBanner(); printHelp(); return 0; }
+
+    installSignalHandler();  // clean shutdown for the stress modes
 
     if (o.showInfo || o.listGpus) {
         CpuInfo cpu = detectCpu();
@@ -464,6 +535,7 @@ int main(int argc, char** argv) {
     printSystem(cpu, gpus);
 
     // Move to the dedicated GPU before any GL context is created.
+    if (o.stress) o.runGpu = o.stressGpu;
     ensureGpuSelection(o, argv);
 
     Monitor monitor;
@@ -472,6 +544,12 @@ int main(int argc, char** argv) {
         std::printf("  %sTemperature / power monitoring enabled (1 Hz)%s\n\n",
                     ansi::yellow(), ansi::reset());
         monitor.start(1.0, true);
+    }
+
+    if (o.stress) {
+        runStressMode(o, monitor);
+        if (o.monitor) { monitor.stop(); printThermals(monitor); }
+        return 0;
     }
 
     std::unique_ptr<CpuBenchResult> cpuResult;
