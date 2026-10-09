@@ -1,0 +1,21 @@
+Package: lennys-benchmark
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: @ARCH@
+Depends: libc6 (>= 2.34), libstdc++6 (>= 12), libgcc-s1 (>= 3.0), libepoxy0, libx11-6, libgl1
+Installed-Size: @SIZE@
+Maintainer: @MAINTAINER@
+Homepage: @HOMEPAGE@
+Description: CPU + GPU benchmark with OpenGL rendering
+ lennys-benchmark is a self-contained CPU and GPU benchmark for Linux.
+ .
+ The CPU suite runs multi-threaded integer, FP32, FP64 and memory-bandwidth
+ tests with a scaling analysis.  The GPU suite opens an X11 window and renders
+ a demanding OpenGL 4.5 scene (procedural torus-knot model, instancing,
+ physically based shading, six dynamic lights, HDR, bloom, ACES tonemapping)
+ and measures geometry and fill throughput.
+ .
+ The program detects the CPU, all integrated and discrete GPUs and reports
+ temperatures, clocks and power draw.  On hybrid systems with an NVIDIA GPU it
+ automatically uses PRIME render offload.

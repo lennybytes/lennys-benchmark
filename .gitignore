@@ -1,0 +1,16 @@
+# build artefacts
+/bin/
+src/*.o
+src/*.d
+*.deb
+*.xbps
+*.AppImage
+*.AppImage.zsync
+
+# packaging scratch space
+/packaging/build/
+
+# editor / OS cruft
+*.swp
+*~
+.DS_Store

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="#0f1620" stroke="#00bed6" stroke-width="5"/>
+  <line x1="52" y1="196" x2="204" y2="196" stroke="#3c4e62" stroke-width="3"/>
+  <rect x="58" y="149" width="26" height="43" rx="6" fill="#00bed6"/>
+  <rect x="104" y="125" width="26" height="67" rx="6" fill="#00bed6"/>
+  <rect x="150" y="102" width="26" height="90" rx="6" fill="#2fd07a"/>
+  <rect x="196" y="78" width="26" height="114" rx="6" fill="#ffcd56"/>
+  <text x="128" y="74" text-anchor="middle" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-size="44" font-weight="bold" fill="#ebf5fa">PK</text>
+</svg>

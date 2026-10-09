@@ -1,0 +1,32 @@
+# Template file for 'lennys-benchmark'
+#
+# Native Void Linux source template.  Place this file (together with the
+# project sources) at `srcpkgs/lennys-benchmark/template` inside a checkout of
+# void-linux/void-packages and build with:
+#
+#     ./xbps-src pkg lennys-benchmark
+#
+# The resulting binary package lands in hostdir/binpkgs.  This template is
+# provided as documentation of the canonical XBPS build; the standalone
+# script `packaging/build-xbps.sh` produces the same package on a
+# non-Void host by invoking xbps-create directly.
+#
+pkgname=lennys-benchmark
+version=1.0.0
+revision=1
+build_style=gnu-makefile
+short_desc="CPU + GPU benchmark with OpenGL rendering"
+maintainer="lfisbeck650-cloud <lfisbeck650-cloud@users.noreply.github.com>"
+license="MIT"
+homepage="https://github.com/lfisbeck650-cloud/lennys-benchmark"
+distfiles="https://github.com/lfisbeck650-cloud/lennys-benchmark/archive/refs/tags/v${version}.tar.gz"
+checksum=SKIP
+makedepends="libepoxy-devel libX11-devel libglvnd-devel"
+depends="libepoxy libX11 libglvnd"
+
+post_install() {
+	vinstall packaging/lennys-benchmark.desktop 0644 usr/share/applications
+	vinstall packaging/icon/lennys-benchmark.png 0644 usr/share/icons/hicolor/256x256/apps
+	vinstall packaging/lennys-benchmark.1 0644 usr/share/man/man1
+	vinstall LICENSE 0644 usr/share/doc/${pkgname} copyright
+}

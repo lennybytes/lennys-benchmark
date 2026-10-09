@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Lennys Benchmark
+GenericName=CPU + GPU Benchmark
+Comment=Cross-platform CPU and GPU benchmark with an OpenGL 4.5 test scene
+Exec=lennys-benchmark
+TryExec=lennys-benchmark
+Icon=lennys-benchmark
+Terminal=true
+Categories=System;Monitor;
+Keywords=benchmark;cpu;gpu;opengl;performance;stress;

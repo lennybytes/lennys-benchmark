@@ -1,0 +1,130 @@
+.\" Manpage for lennys-benchmark
+.TH LENNYS-BENCHMARK 1 "2026-10-09" "lennys-benchmark 1.0.0" "User Commands"
+.SH NAME
+lennys-benchmark \- CPU and GPU benchmark with OpenGL rendering
+.SH SYNOPSIS
+.B lennys-benchmark
+.RI [ options ]
+.SH DESCRIPTION
+.B lennys-benchmark
+is a self-contained CPU and GPU benchmark for Linux.  The CPU suite runs
+multi-threaded integer, FP32, FP64 and memory-bandwidth tests.  The GPU suite
+opens an X11 window and renders a demanding OpenGL 4.5 scene (a procedurally
+generated torus-knot model with instancing, physically based shading, six
+dynamic lights, HDR, bloom and ACES tonemapping) and measures geometry and
+fill throughput.
+.PP
+The program detects the CPU, all GPUs (integrated and discrete) and, on
+hybrid systems with an NVIDIA GPU, automatically re-executes itself through
+PRIME render offload so that the discrete GPU is used.
+.PP
+Run it without arguments for a CPU+GPU benchmark, or add
+.B \-\-monitor
+to sample temperatures, clocks and power draw once per second.
+.SH OPTIONS
+.SS Benchmark selection
+.TP
+.BR \-\-all
+Run the CPU and GPU benchmarks (default).
+.TP
+.BR \-\-cpu
+Run only the CPU benchmark.
+.TP
+.BR \-\-gpu
+Run only the GPU benchmark.
+.TP
+.BR \-\-info ", " \-i
+Print the detected hardware and exit.
+.TP
+.BR \-\-list\-gpus
+List every GPU found on the system.
+.TP
+.BR \-\-monitor
+Sample CPU and GPU temperature, clock, utilisation and power draw once per
+second and print a summary at the end.
+.SS Durations
+.TP
+.BR \-\-seconds " N"
+Set the duration for both benchmarks.
+.TP
+.BR \-\-cpu\-seconds " N"
+Duration per CPU sub-test in seconds (default 3).
+.TP
+.BR \-\-gpu\-seconds " N"
+GPU benchmark duration in seconds (default 8).
+.TP
+.BR \-\-threads " N"
+Number of CPU worker threads (default: all logical cores).
+.TP
+.BR \-\-quick
+Faster, less thorough CPU test set.
+.SS GPU / scene
+.TP
+.BR \-\-quality " N"
+Tessellation preset, 1 to 4 (default 3).
+.TP
+.BR \-\-instances " N"
+Number of instanced models, 1 to 32.
+.TP
+.BR \-\-width " N " \-\-height " N"
+Render and window resolution (default 1600x900).
+.TP
+.BR \-\-no\-window
+Run without a visible window.
+.TP
+.BR \-\-interactive
+Render until the window is closed (ESC quits, SPACE pauses, W toggles
+wireframe, R resets the camera).
+.TP
+.BR \-\-vsync
+Enable vertical sync.
+.TP
+.BR \-\-wireframe
+Draw the scene as a wireframe.
+.TP
+.BR \-\-screenshot " FILE"
+Save a rendered frame as a PPM image.
+.TP
+.BR \-\-gpu\-vendor " V"
+Select the GPU: \fIauto\fR, \fInvidia\fR, \fIamd\fR or \fIsystem\fR (default auto).
+.SS Output
+.TP
+.BR \-\-json " FILE"
+Also write machine readable results to FILE.
+.TP
+.BR \-\-seed " N"
+Random seed for the CPU tests.
+.TP
+.BR \-\-color ", " \-\-no\-color
+Force or disable ANSI colours.
+.TP
+.BR \-\-help ", " \-h
+Show the help text.
+.SH EXAMPLES
+.TP
+Full one-minute benchmark with live monitoring:
+.PP
+.nf
+    lennys-benchmark --cpu-seconds 6 --gpu-seconds 30 --monitor
+.fi
+.TP
+Quick CPU+GPU overview:
+.PP
+.nf
+    lennys-benchmark --seconds 5
+.fi
+.TP
+Maximum load on the discrete GPU with JSON output:
+.PP
+.nf
+    lennys-benchmark --gpu --quality 4 --gpu-seconds 20 --json results.json
+.fi
+.SH FILES
+.TP
+.I /usr/bin/lennys-benchmark
+The benchmark binary.
+.SH SEE ALSO
+.BR nvidia-smi (1),
+.BR glxinfo (1)
+.SH AUTHOR
+lfisbeck650-cloud.
